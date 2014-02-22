@@ -21,3 +21,5 @@ test-tmp
 *.class
 mods
 test-credentials.txt
+vertx_classpath.txt
+.pydevproject
