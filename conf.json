@@ -1,5 +1,12 @@
-// Example JSON config file
-
 {
-  "foo": "bar"
+	"testmode": true,
+	"autostart": [
+	              {"track": ["#yolo", "vertx"],
+                   "publishChannel": "test.tweets", 
+                   "consumerKey": "loaded from test-credentials.txt in testmode", 
+                   "consumerSecret": "...",
+                   "appToken": "...", 
+                   "appSecret": "..."
+	              }
+	             ]
 }
