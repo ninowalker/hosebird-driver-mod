@@ -1,7 +1,8 @@
 {
   // Python verticle
-  "main": "hbdriver.py",
+  "main": "service.py",
 
+  "includes": "io.vertx~mod-web-server~2.0.0-final",
 
   // If your module is going to be registered in the Vert.x module registry you will also need the following
   // mandatory fields

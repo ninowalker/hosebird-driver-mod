@@ -5,7 +5,7 @@ export OAUTH_CREDENTIALS
 run: test-credentials.txt
 	./gradlew runMod -i
 	
-clean install:
+clean install assemble:
 	./gradlew $@
 	
 test-credentials.txt:

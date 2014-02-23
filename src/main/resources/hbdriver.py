@@ -11,8 +11,9 @@ from core.shared_data import SharedData
 from java.util.concurrent import LinkedBlockingQueue
 from org.vertx.java.core.json import JsonObject
 import functools
+from credmgr import CredentialManager
+from controller import start_server 
 
-config = vertx.config()
 logger = vertx.logger()
 
 
@@ -29,15 +30,50 @@ class HBCAgent(object):
     STATUS_ADDRESS = "hbdriver:stati"
     SHUTDOWN_ADDRESS = "hbdriver:shutdown"
     
-    def __init__(self, client, key):
-        self.client = client
-        self.address = "hbdriver:client:" + key
+    def __init__(self, cfg, creds):
+        self.id = cfg['id']
+        self.cfg = cfg
+        self.client = self._build_client(cfg, creds)
+        self.address = "hbdriver:client:" + self.id
         self._handlers = []
         for addr, h in [(self.address, self.handler),
                         (self.STATUS_ADDRESS, self.status_handler),
                         (self.SHUTDOWN_ADDRESS, self.shutdown_handler)]:
             hid = EventBus.register_handler(addr, handler=h)
             self._handlers.append(hid)
+            
+    @property
+    def name(self):
+        if self.cfg.get('name'):
+            return "%s-%s" % (self.cfg['name'], self.id)
+        return self.id
+            
+    def start(self):
+        logger.info("Connecting hosebird for %s..." % self.name)
+        self.client.connect()
+            
+    def _build_client(self, cfg, creds):
+        logger.info("Configuring hosebird for %s" % self.id)
+        queue = EventBusQueue(cfg['publishChannel'])
+        endpoint = StatusesFilterEndpoint()
+        if cfg.get('track'):
+            endpoint.trackTerms(cfg['track'])
+        if cfg.get('follow'):
+            endpoint.followings(cfg['follow'])
+        if cfg.get('locations'):
+            locations = [Location(Location.Coordinate(w, s), Location.Coordinate(e, n)) 
+                         for s, w, n, e in cfg['locations']]
+            endpoint.locations(locations)
+        auth = OAuth1(*creds)
+    
+        client = ClientBuilder()\
+          .hosts(Constants.STREAM_HOST)\
+          .endpoint(endpoint)\
+          .authentication(auth)\
+          .processor(StringDelimitedProcessor(queue))\
+          .build()
+        return client
+
         
     def _status(self):
         t = self.client.getStatsTracker()
@@ -63,10 +99,12 @@ class HBCAgent(object):
     
     def _shutdown(self):
         logger.warn("Shutting down %s..." % self.address)
+        EventBus.send(CredentialManager.ADDRESS, dict(command="release",
+                                                      id=self.id))
         status = 200
         msg = None
         try:
-            self.client.stop(0)
+            self.client.stop(100)
         except Exception, e:
             logger.error("Failed to stop: %s" % self.address, e)
             status = 500
@@ -86,63 +124,63 @@ class HBCAgent(object):
             msg.reply(self._shutdown())
             return
         msg.reply(dict(status=500, msg="Unknown command"))
-    
-def start_stream(msgw):
-    msg = msgw.body
-    
-    key = msg['consumerKey']
-    logger.error("Checking if %s is already in use..." % key)
-    clients = {} #SharedData.get_hash('hbdriver.clients')
-    if key in clients:
-        logger.error("Client already started.")
-        msgw.reply(dict(status=409))
-        return
-    logger.info("Configuring hosebird for %s" % key)
-    queue = EventBusQueue(msg['publishChannel'])
-    endpoint = StatusesFilterEndpoint()
-    if msg.get('track'):
-        endpoint.trackTerms(msg['track'])
-    if msg.get('follow'):
-        endpoint.followings(msg['follow'])
-    if msg.get('locations'):
-        locations = [Location(Location.Coordinate(w, s), Location.Coordinate(e, n)) 
-                     for s, w, n, e in msg['locations']]
-        endpoint.locations(locations)
-    auth = OAuth1(msg['consumerKey'], msg['consumerSecret'], msg['appToken'], msg['appSecret'])
-    
-    client = ClientBuilder()\
-      .hosts(Constants.STREAM_HOST)\
-      .endpoint(endpoint)\
-      .authentication(auth)\
-      .processor(StringDelimitedProcessor(queue))\
-      .build()
 
-    logger.info("Connecting hosebird for %s..." % key)
-    client.connect()
     
-    clientw = HBCAgent(client, key)            
-    msgw.reply(dict(status=200, clientAddress=clientw.address))
+def start_stream(msg):    
+    cfg = msg.body
+    
+    def _on_credentials(cmsg):
+        if cmsg.body['status'] == 200:
+            client = HBCAgent(cfg, cmsg.body['credentials'])
+            client.start()
+            msg.reply(dict(status=200, clientAddress=client.address))
+        else:
+            msg.reply(dict(status=500, msg="Failure to acquire credentials", 
+                           cause=cmsg.body))
+        
+    EventBus.send(CredentialManager.ADDRESS,
+                  dict(command="acquire", id=cfg['id']),
+                  _on_credentials)            
 
 
 EventBus.register_handler('hbdriver:start', handler=start_stream)
 
 
-test_mode = config.get('testmode', False)
-if test_mode:
+def init_controller(config):
+    if config.get('webserver') is not None:
+        start_server(config['webserver'])
+
+
+def init_credmgr(config):
+    mgr = CredentialManager([])    
+    for cfg in config.get("credentials") or []:
+        mgr.add(cfg)
+    key = config.get("credentialsEnvVar")
+    if not key:
+        return
     try:
-        creds = vertx.env()['OAUTH_CREDENTIALS']
-        consumer_key, consumer_secret, app_token, app_secret = creds.split(" ")
-        for i, cfg in enumerate(config.get('autostart', [])):
-            cfg['consumerKey'] = consumer_key
-            cfg['consumerSecret'] = consumer_secret
-            cfg['appToken'] = app_token
-            cfg['appSecret'] = app_secret
-    except Exception, e:
-        logger.error("*" * 80)
-        logger.error("Credentials could not be loaded fron environment var: OAUTH_CREDENTIALS: %s" % e)
-        logger.error("*" * 80)
-        vertx.exit()
-    
+        mgr.from_env(key)
+    except KeyError, e:
+        if mgr.size() == 0:
+            logger.error("*" * 80)
+            logger.error("No credentials found in the config, and credentials could not be loaded from env")
+            logger.error("*" * 80)
+            vertx.exit()
+        
+
+def init_autostart(config):
+    for i, cfg in enumerate(config.get('autostart', [])):
+        if not cfg.get('enabled', True):
+            logger.info("Skipping disabled config #%d" % i)
+            continue
+        cfg['id'] = "autostart-" + str(i)
+        EventBus.send('hbdriver:start', cfg, lambda msg: logger.info("Started hosebird for config #%d: %s" % (i, msg.body)))
+
+
+def init_test_setup(config):
+    if not config.get('testmode', False):
+        return 
+
     def register(addr):
         def _wrapper(func):
             EventBus.register_handler(addr, handler=func)
@@ -165,17 +203,15 @@ if test_mode:
     def on_shutdown(msg):
         print "Shutdown >>>", msg.body
         vertx.exit()
+        
+    # simple shutdown hook
+    exit_after = config.get('testmode').get('exitAfter', 10)
+    if exit_after:
+        vertx.set_timer(exit_after * 1000, 
+                        lambda x: EventBus.publish(HBCAgent.SHUTDOWN_ADDRESS, 
+                                                   dict(replyTo="test.shutdown")))
 
-    vertx.set_timer(10000, lambda x: EventBus.publish(HBCAgent.SHUTDOWN_ADDRESS, 
-                                                      dict(replyTo="test.shutdown")))
 
-
-for i, cfg in enumerate(config.get('autostart', [])):
-    if not cfg.get('enabled', True):
-        logger.info("Skipping disabled config #%d" % i)
-        continue
-    
-    EventBus.send('hbdriver:start', cfg, lambda msg: logger.info("Started hose for config #%d: %s" % (i, msg.body)))
 
     
     

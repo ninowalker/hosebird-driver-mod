@@ -1,12 +1,15 @@
 {
-	"testmode": true,
+	"testmode": {"exitAfter": 15},
+	"webserver": {},
 	"autostart": [
-	              {"track": ["#yolo", "vertx"],
-                   "publishChannel": "test.tweets", 
-                   "consumerKey": "loaded from test-credentials.txt in testmode", 
-                   "consumerSecret": "...",
-                   "appToken": "...", 
-                   "appSecret": "..."
+	              {
+	            	  "track": ["meow", "vertx"],
+	            	  "name": "test",
+	            	  "id": "set at runtime",
+	            	  "type": "StatusesFilter",
+	            	  "publishChannel": "test.tweets"
 	              }
-	             ]
+	             ],
+	"credentials": null,
+	"credentialsEnvVar": "OAUTH_CREDENTIALS"
 }
