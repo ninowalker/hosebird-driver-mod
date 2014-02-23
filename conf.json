@@ -1,5 +1,5 @@
 {
-	"testmode": {"exitAfter": 15},
+	"testmode": {"exitAfter": 30},
 	"webserver": {},
 	"autostart": [
 	              {
