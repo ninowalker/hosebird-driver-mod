@@ -1,9 +1,11 @@
 {
-	"testmode": {"exitAfter": 30},
-	"webserver": {},
+	"testmode": {"exitAfter": 2200},
+	"webserver": {
+		"web_root": "/Users/nino/dev/hbdriver/src/main/resources/web"
+	},
 	"autostart": [
 	              {
-	            	  "track": ["meow", "vertx"],
+	            	  "track": ["meow", "lol", "vertx"],
 	            	  "name": "test",
 	            	  "id": "set at runtime",
 	            	  "type": "StatusesFilter",

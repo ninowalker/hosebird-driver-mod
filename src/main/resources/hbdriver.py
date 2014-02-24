@@ -12,35 +12,40 @@ from java.util.concurrent import LinkedBlockingQueue
 from org.vertx.java.core.json import JsonObject
 import functools
 from credmgr import CredentialManager
-from controller import start_server 
+from controller import start_server
+from java.util import ArrayList
+from org.apache.commons.collections.buffer import CircularFifoBuffer
 
 logger = vertx.logger()
 
 
 class EventBusQueue(LinkedBlockingQueue):
     """Mocks the interface and instead publishes to the event bus."""
-    def __init__(self, channel):
-        self.channel = channel
+    def __init__(self, agent):
+        self.agent = agent
         
     def offer(self, item, *args):
-        EventBus.publish(self.channel, JsonObject(item))
-
+        self.agent.receive(item)
 
 class HBCAgent(object):
-    STATUS_ADDRESS = "hbdriver:stati"
-    SHUTDOWN_ADDRESS = "hbdriver:shutdown"
+    STATUS_ADDRESS = "hbdriver.stati"
+    SHUTDOWN_ADDRESS = "hbdriver.shutdown"
     
     def __init__(self, cfg, creds):
         self.id = cfg['id']
         self.cfg = cfg
         self.client = self._build_client(cfg, creds)
-        self.address = "hbdriver:client:" + self.id
+        self.address = "hbdriver.client.%s" % self.id
+        self.stream = "hbdriver.client.%s.stream" % self.id
+        self.events = "hbdriver.client.%s.events" % self.id
+        self.recent = CircularFifoBuffer(200)
         self._handlers = []
         for addr, h in [(self.address, self.handler),
                         (self.STATUS_ADDRESS, self.status_handler),
                         (self.SHUTDOWN_ADDRESS, self.shutdown_handler)]:
             hid = EventBus.register_handler(addr, handler=h)
             self._handlers.append(hid)
+        self.tweets = 0
             
     @property
     def name(self):
@@ -51,10 +56,35 @@ class HBCAgent(object):
     def start(self):
         logger.info("Connecting hosebird for %s..." % self.name)
         self.client.connect()
+        
+    def handler(self, msg):
+        command = msg.body['command']
+        getattr(self, "handle_%s" % command)(msg)
+        
+    def handle_status(self, msg):
+        msg.reply(self._status())
+        
+    def handle_shutdown(self, msg):
+        msg.reply(self._shutdown())
+        
+    def handle_last_n(self, msg):
+        recent = list(self.recent)
+        msg.reply(dict(items=map(lambda x: x.toMap(), recent[0:msg.body['n']])))
+        
+    def receive(self, item):
+        self.tweets += 1
+        obj = JsonObject(item)
+        #obj['_agent'] = self.agent.id
+        #obj['_received'] = time.time()
+        self.recent.add(obj)
+        # TODO
+        EventBus.publish(self.events, 1)
+        EventBus.publish(self.stream, obj)
+
             
     def _build_client(self, cfg, creds):
         logger.info("Configuring hosebird for %s" % self.id)
-        queue = EventBusQueue(cfg['publishChannel'])
+        queue = EventBusQueue(self)
         endpoint = StatusesFilterEndpoint()
         if cfg.get('track'):
             endpoint.trackTerms(cfg['track'])
@@ -85,11 +115,14 @@ class HBCAgent(object):
                   ('getNumConnectionFailures', 'connfailures'),
                   ('getNumClientEventsDropped', 'eventsdropped')]:
             stats[v] = getattr(t, a)()
+            
+        for a in ['tweets']:
+            stats[a] = getattr(self, a)
 
         if not self.client.isDone():
-            return dict(status=200, address=self.address, stats=stats)
+            return dict(status=200, address=self.address, stats=stats, config=self.cfg)
         else:
-            return dict(status=500, address=self.address, status=stats)
+            return dict(status=500, address=self.address, status=stats, config=self.cfg)
         
     def status_handler(self, msg):
         EventBus.publish(msg.body['replyTo'], self._status())
@@ -115,16 +148,6 @@ class HBCAgent(object):
         logger.info("Shutdown %s: status=%s" % (self.address, status))
         return dict(status=status, address=self.address, msg=msg)
 
-    def handler(self, msg):
-        command = msg.body.get('command')
-        if command == 'status':
-            msg.reply(self._status())
-            return
-        if command in ('stop', 'shutdown'):
-            msg.reply(self._shutdown())
-            return
-        msg.reply(dict(status=500, msg="Unknown command"))
-
     
 def start_stream(msg):    
     cfg = msg.body
@@ -143,7 +166,7 @@ def start_stream(msg):
                   _on_credentials)            
 
 
-EventBus.register_handler('hbdriver:start', handler=start_stream)
+EventBus.register_handler('hbdriver.start', handler=start_stream)
 
 
 def init_controller(config):
@@ -174,7 +197,7 @@ def init_autostart(config):
             logger.info("Skipping disabled config #%d" % i)
             continue
         cfg['id'] = "autostart-" + str(i)
-        EventBus.send('hbdriver:start', cfg, lambda msg: logger.info("Started hosebird for config #%d: %s" % (i, msg.body)))
+        EventBus.send('hbdriver.start', cfg, lambda msg: logger.info("Started hosebird for config #%d: %s" % (i, msg.body)))
 
 
 def init_test_setup(config):
@@ -187,16 +210,25 @@ def init_test_setup(config):
             return func
         return _wrapper
 
-    @register('test.tweets')
-    def tweet_handler(msg):
-        print msg.body
-
     @functools.partial(vertx.set_periodic, 1000)
     def status(tid):
         EventBus.publish(HBCAgent.STATUS_ADDRESS, dict(replyTo="test.status"))
 
+    clients = set([])
+
     @register('test.status')
     def print_status(msg):
+        a = msg.body['address']
+        if a not in clients:
+            @register(a + ".stream")
+            def tweet_handler(msg):
+                print a, ">>>", msg.body['id']
+            @register(a + ".events")
+            def tweet_handler(msg):
+                EventBus.publish("hbdriver.events", dict(a=a, e=msg.body))
+                print a, "event >>>", msg.body
+            clients.add(a)
+            
         print "Status >>>", msg.body
 
     @register('test.shutdown')

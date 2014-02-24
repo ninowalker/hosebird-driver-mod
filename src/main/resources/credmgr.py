@@ -7,7 +7,7 @@ logger = vertx.logger()
 
 
 class CredentialManager(object):
-    ADDRESS = 'hbdriver:credentials'
+    ADDRESS = 'hbdriver.credentials'
 
     def __init__(self, credentials, address=ADDRESS):
         self._pool = list(credentials)
@@ -16,25 +16,35 @@ class CredentialManager(object):
 
     def handle(self, msg):
         cmd = msg.body['command']
+        getattr(self, "handle_%s" % cmd)(msg)
+        
+    def handle_acquire(self, msg):
         actor = msg.body['id']
-        if cmd == 'acquire':
-            try:
-                creds = self._pool.pop(0)
-                self._inuse[actor] = creds
-                logger.info("%s has acquired credentials" % actor)
-                msg.reply(dict(status=200, credentials=creds))
-            except IndexError:
-                msg.reply(dict(status=404, msg="No credentials available"))
-        if cmd == 'release':
-            try:
-                creds = self._inuse.pop(actor)
-                self._pool.append(creds)
-                logger.info("%s has released credentials" % actor)
-                msg.reply(dict(status=200))
-            except KeyError:
-                msg.reply(dict(status=404, msg="Unknown indentifier: %s" % actor))
-        if cmd == 'add':
-            self.add(msg.body['credentials'])
+        try:
+            creds = self._pool.pop(0)
+            self._inuse[actor] = creds
+            logger.info("%s has acquired credentials" % actor)
+            msg.reply(dict(status=200, credentials=creds))
+        except IndexError:
+            msg.reply(dict(status=404, msg="No credentials available"))
+    
+    def handle_release(self, msg):
+        actor = msg.body['id']
+        try:
+            creds = self._inuse.pop(actor)
+            self._pool.append(creds)
+            logger.info("%s has released credentials" % actor)
+            msg.reply(dict(status=200))
+        except KeyError:
+            msg.reply(dict(status=404, msg="Unknown indentifier: %s" % actor))
+
+    def handle_add(self, msg):
+        self.add(msg.body['credentials'])
+
+    def handle_status(self, msg):
+        d = dict(available=self._pool.copy(),
+                 inuse=self._inuse.copy())
+        msg.reply(d)
             
     def size(self):
         return len(self._pool) + len(self._inuse)

@@ -15,6 +15,6 @@
   "keywords": ["Twitter", "Hosebird", "Streaming API"],
   "homepage": "https://github.com/ninowalker/hosebird-driver-mod",
 
-  "auto-redeploy": true
+  "auto-redeploy": false
 
 }

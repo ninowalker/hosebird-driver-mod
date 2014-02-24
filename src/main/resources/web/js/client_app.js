@@ -14,126 +14,181 @@
  * limitations under the License.
  */
 
-(function DemoViewModel() {
+(function HosebirdDriverModel() {
+	var self = this;
+	var eb = new vertx.EventBus(window.location.protocol + '//'
+			+ window.location.hostname + ':' + window.location.port
+			+ '/eventbus');
+	window.model = this;
+	self.tweetCount = ko.observable(0);
+	self.active = ko.observableArray([]);
+	self.total = ko.computed(function () { return self.active().length });
+	self.selected = ko.observable(null);
+		
+	self.tweetCount.subscribe(function (p) {
+		$(".tweet-count-progress").attr("style", "width: " + Math.floor((p / 10) % 100) + "%");
+	});
+		
+	// set interval
+	var tid = setInterval(function () {
+		if (!self.selected()) {
+			return;
+		}
+		self.selected().refresh();
+		self.selected().last(10);
+	}, 3000);
 
-  var that = this;
-  var eb = new vertx.EventBus(window.location.protocol + '//' + window.location.hostname + ':' + window.location.port + '/eventbus');
-  that.items = ko.observableArray([]);
+	ko.applyBindings(self);
 
-  eb.onopen = function() {
+	eb.onopen = function() {
+		eb
+				.registerHandler(
+						'hbdriver.events',
+						function(msg) {
+							if (msg.e === 1) {
+								self.tweetCount(self.tweetCount() + 1);
+							}
+						});
+		eb.registerHandler('hbbrowser.stati', function (msg) {
+			console.log(msg);
+			self.active.push(new Client(msg));
+		});
+		eb.publish('hbdriver.stati', {
+			replyTo: 'hbbrowser.stati'
+		});
+	};
 
-    // Get the static data
 
-    eb.send('vertx.mongopersistor', {action: 'find', collection: 'albums', matcher: {} },
-      function(reply) {
-        if (reply.status === 'ok') {
-          var albumArray = [];
-          for (var i = 0; i < reply.results.length; i++) {
-            albumArray[i] = new Album(reply.results[i]);
-          }
-          that.albums = ko.observableArray(albumArray);
-          ko.applyBindings(that);
-        } else {
-          console.error('Failed to retrieve albums: ' + reply.message);
-        }
-      });
-  };
+	eb.onclose = function() {
+		eb = null;
+	};
+	
+	self.selectClient = function (client) {
+		console.log(client);
+		self.selected(client);
+	};
 
-  eb.onclose = function() {
-    eb = null;
-  };
-
-  that.addToCart = function(album) {
-    console.log("Adding to cart: " + JSON.stringify(album));
-    for (var i = 0; i < that.items().length; i++) {
-      var compare = that.items()[i];
-      if (compare.album._id === album._id) {
-        compare.quantity(compare.quantity() + 1);
-        return;
-      }
-    }
-    that.items.push(new CartItem(album));
-  };
-
-  that.removeFromCart = function(cartItem) {
-    that.items.remove(cartItem);
-  };
-
-  that.total = ko.computed(function() {
-    var tot = 0;
-    for (var i = 0; i < that.items().length; i++) {
-      var item = that.items()[i];
-      tot += item.quantity() * item.album.price;
-    }
-    tot = '$' + tot.toFixed(2);
-    return tot;
-  });
-
-  that.orderReady = ko.computed(function() {
-    var or =  that.items().length > 0 && that.loggedIn;
-    return or;
-  });
-
-  that.orderSubmitted = ko.observable(false);
-
-  that.submitOrder = function() {
-
-    if (!orderReady()) {
-      return;
-    }
-
-    var orderItems = ko.toJS(that.items);
-    var orderMsg = {
-      action: "save",
-      collection: "orders",
-      document: {
-        username: that.username(),
-        items: orderItems
-      }
-    }
-
-    eb.send('vertx.mongopersistor', orderMsg, function(reply) {
-      if (reply.status === 'ok') {
-        that.orderSubmitted(true);
-        // Timeout the order confirmation box after 2 seconds
-        // window.setTimeout(function() { that.orderSubmitted(false); }, 2000);
-      } else {
-        console.error('Failed to accept order');
-      }
-    });
-  };
-
-  that.username = ko.observable('');
-  that.password = ko.observable('');
-  that.loggedIn = ko.observable(false);
-
-  that.login = function() {
-    if (that.username().trim() != '' && that.password().trim() != '') {
-      eb.login(that.username(), that.password(), function (reply) {
-        if (reply.status === 'ok') {
-          that.loggedIn(true);
-        } else {
-          alert('invalid login');
-        }
-      });
-    }
-  }
-
-  function Album(json) {
-    var that = this;
-    that._id = json._id;
-    that.genre = json.genre;
-    that.artist = json.artist;
-    that.title = json.title;
-    that.price = json.price;
-    that.formattedPrice = ko.computed(function() {
-      return '$' + that.price.toFixed(2);
-    });
-  }
-
-  function CartItem(album) {
-    var that = this;
-    that.album = album;
-    that.quantity = ko.observable(1);
-  }
+	function Client(json) {
+		var self = this;
+		self.name = json.address.replace(/.*:/, "");
+		self.address = json.address;
+		self.stats = ko.observableArray([]);
+		self.statValues = {};
+		self.config = ko.observable();
+		self._update(json);
+		self.lastN = ko.observableArray([]);
+		self.maxLength = 20;
+	}
+	
+	Client.prototype._update = function (json) {
+		var self = this;
+		self.config(json.config);
+		for (var type in json.stats) {
+			var val = json.stats[type];
+			if (self.statValues[type]) {
+				self.statValues[type](val);
+				continue;
+			}
+		    var item = {};
+		    item.type = type;
+		    item.value = ko.observable(val);
+		    self.stats.push(item);
+		    self.statValues[type] = item.value;
+		}
+	};
+	
+	Client.prototype.refresh = function () {
+		var self = this;
+		eb.send(self.address, 
+				{'command': 'status'},
+				function (msg) {
+					self._update(msg);
+				});
+	};
+	
+	Client.prototype.last = function (n) {
+		var self = this;
+		eb.send(self.address, 
+				{'command': 'last_n', 'n': n},
+				function (msg) {
+					for (var i = 0; i < msg.items.length; i++) {
+						var m = msg.items[i];
+						if (m.text) {
+							m.url = "https://twitter.com/" + m.user.screen_name + "/status/" + m.id;
+						}
+						self.lastN.unshift(m);
+					}
+					while (self.lastN().length > self.maxLength) {
+						self.lastN.pop();
+					}
+				});
+	};
+	
+	
+//
+//	self.orderSubmitted = ko.observable(false);
+//
+//	self.submitOrder = function() {
+//
+//		if (!orderReady()) {
+//			return;
+//		}
+//
+//		var orderItems = ko.toJS(self.items);
+//		var orderMsg = {
+//			action : "save",
+//			collection : "orders",
+//			document : {
+//				username : self.username(),
+//				items : orderItems
+//			}
+//		}
+//
+//		eb.send('vertx.mongopersistor', orderMsg, function(reply) {
+//			if (reply.status === 'ok') {
+//				self.orderSubmitted(true);
+//				// Timeout the order confirmation box after 2 seconds
+//				// window.setTimeout(function() { self.orderSubmitted(false); },
+//				// 2000);
+//			} else {
+//				console.error('Failed to accept order');
+//			}
+//		});
+//	};
+//
+//	self.username = ko.observable('');
+//	self.password = ko.observable('');
+//	self.loggedIn = ko.observable(false);
+//
+//	self.login = function() {
+//		if (self.username().trim() != '' && self.password().trim() != '') {
+//			eb.login(self.username(), self.password(), function(reply) {
+//				if (reply.status === 'ok') {
+//					self.loggedIn(true);
+//				} else {
+//					alert('invalid login');
+//				}
+//			});
+//		}
+//	}
+//
+//	function Album(json) {
+//		var self = this;
+//		self._id = json._id;
+//		self.genre = json.genre;
+//		self.artist = json.artist;
+//		self.title = json.title;
+//		self.price = json.price;
+//		self.formattedPrice = ko.computed(function() {
+//			return '$' + self.price.toFixed(2);
+//		});
+//	}
+//
+//	function CartItem(album) {
+//		var self = this;
+//		self.album = album;
+//		self.quantity = ko.observable(1);
+//	}
+//	
+//	
 })();

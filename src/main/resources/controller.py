@@ -7,11 +7,13 @@ def start_server(cfg):
     m.update(web_server_conf)
     m.update(cfg)
     # Start the web server, with the config we defined above
-    vertx.deploy_module('io.vertx~mod-web-server~2.0.0-final', m)
+    module = m.pop('module')
+    vertx.deploy_module(module, m)
 
 
 # Configuration for the web server
 web_server_conf = {
+    'module': 'io.vertx~mod-web-server~2.0.0-final',
 
     # Normal web server stuff
     'port': 8080,
@@ -25,7 +27,11 @@ web_server_conf = {
     # This defines which messages from the client we will let through
     # to the server side
     'inbound_permitted':  [
+        {
+            'address_re': r'hbdriver\..*'
+        },
         # Allow calls to login
+        
         {
             'address': 'vertx.basicauthmanager.login'
         },
@@ -40,7 +46,7 @@ web_server_conf = {
         # And to place orders
         {
             'address': 'vertx.mongopersistor',
-            'requires_auth': True,  # User must be logged in to send let these through
+            'requires_auth': True, # User must be logged in to send let these through
             'match': {
                 'action': 'save',
                 'collection': 'orders'
@@ -50,8 +56,7 @@ web_server_conf = {
 
     # This defines which messages from the server we will let through to the client
     'outbound_permitted': [
-        {
-            'match': 'test.*'
-        }
+        dict(address='hbdriver.events'),
+        dict(address_re=r'hbbrowser\..*'),
     ]
 }
