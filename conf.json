@@ -1,17 +1,17 @@
 {
-	"testmode": {"exitAfter": 2200},
-	"webserver": {
-		"web_root": "/Users/nino/dev/hbdriver/src/main/resources/web"
-	},
-	"autostart": [
-	              {
-	            	  "track": ["meow", "lol", "vertx"],
-	            	  "name": "test",
-	            	  "id": "set at runtime",
-	            	  "type": "StatusesFilter",
-	            	  "publishChannel": "test.tweets"
-	              }
-	             ],
-	"credentials": null,
-	"credentialsEnvVar": "OAUTH_CREDENTIALS"
+    "testmode": {"exitAfter": 2200},
+    "webserver": {
+        "web_root": "/Users/nino/dev/hbdriver/src/main/resources/web"
+    },
+    "autostart": [
+                  {
+                      "track": ["meow", "lol", "vertx"],
+                      "name": "test",
+                      "id": "set at runtime",
+                      "type": "StatusesFilter",
+                      "publishChannel": "test.tweets"
+                  }
+                 ],
+    "credentials": null,
+    "credentialsEnvVar": "OAUTH_CREDENTIALS"
 }
