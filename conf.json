@@ -5,7 +5,7 @@
     },
     "autostart": [
                   {
-                      "track": ["meow", "lol", "vertx"],
+                      "track": ["meow", "omfg", "vertx"],
                       "name": "test",
                       "id": "set at runtime",
                       "type": "StatusesFilter",

@@ -41,9 +41,9 @@ class CredentialManager(object):
     def handle_add(self, msg):
         self.add(msg.body['credentials'])
 
-    def handle_status(self, msg):
-        d = dict(available=self._pool.copy(),
-                 inuse=self._inuse.copy())
+    def handle_list(self, msg):
+        d = dict(available=[c for c in self._pool],
+                 inuse=self._inuse.items())
         msg.reply(d)
             
     def size(self):
