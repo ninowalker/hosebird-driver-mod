@@ -28,6 +28,7 @@ class EventBusQueue(LinkedBlockingQueue):
     def offer(self, item, *args):
         self.agent.receive(item)
 
+
 class HBCAgent(object):
     MULTICAST = "hbdriver.multicast"
     ANNOUNCE_ADDRESS = "hbdriver.announce"
@@ -36,14 +37,14 @@ class HBCAgent(object):
         self.id = cfg['id']
         self.cfg = cfg
         self.cfg['credentials'] = creds
-        self.client = self._build_client(cfg, creds)
+        self.client = self._build_client()
         self.address = "hbdriver.client.%s" % self.id
         self.recent = CircularFifoBuffer(200)
         self._handlers = []
         for addr, h in [(self.address, self.handler),
                         (self.MULTICAST, self.multicast_handler)]:
             hid = EventBus.register_handler(addr, handler=h)
-            self._handlers.append(hid)
+            #self._handlers.append(hid)
         self.tweets = 0
         EventBus.publish(self.ANNOUNCE_ADDRESS, dict(action="joined", 
                                                      address=self.address))
@@ -72,6 +73,9 @@ class HBCAgent(object):
                     
     def handle_status(self, msg):
         return self._status()
+    
+    def handle_cycle(self, msg):
+        return self._cycle()
         
     def handle_shutdown(self, msg):
         return self._shutdown()
@@ -90,10 +94,12 @@ class HBCAgent(object):
         EventBus.publish(self.address + ".events", 1)
         EventBus.publish(self.address + ".stream", obj)
             
-    def _build_client(self, cfg, creds):
+    def _build_client(self):
+        cfg = self.cfg
+        creds = cfg['credentials']
         logger.info("Configuring hosebird for %s" % self.id)
         queue = EventBusQueue(self)
-        endpoint = self._build_endpoint(cfg)
+        endpoint = self._build_endpoint()
         auth = OAuth1(*creds)
     
         client = ClientBuilder()\
@@ -104,7 +110,8 @@ class HBCAgent(object):
           .build()
         return client
     
-    def _build_endpoint(self, cfg):
+    def _build_endpoint(self):
+        cfg = self.cfg
         endpoint = StatusesFilterEndpoint()
         if cfg.get('track'):
             endpoint.trackTerms(cfg['track'])
@@ -115,6 +122,15 @@ class HBCAgent(object):
                          for s, w, n, e in cfg['locations']]
             endpoint.locations(locations)
         return endpoint
+    
+    def _cycle(self):
+        try:
+            self.client.stop(100)
+        except:
+            pass
+        self.client = self._build_client()
+        self.client.connect()
+        return dict(status=200)
         
     def _status(self):
         t = self.client.getStatsTracker()
@@ -145,7 +161,7 @@ class HBCAgent(object):
             logger.error("Failed to stop: %s" % self.address, e)
             status = 500
             msg = str(e)
-        self.client = None
+        #self.client = None
         for hid in self._handlers:
             EventBus.unregister_handler(hid)
         logger.info("Shutdown %s: status=%s" % (self.address, status))
@@ -222,7 +238,7 @@ def init_test_setup(config):
     def tweet_handler(msg):
         print ">>>", msg.body.get('id')
 
-    @functools.partial(vertx.set_periodic, 1000)
+    @functools.partial(vertx.set_periodic, 10000)
     def status(tid):
         EventBus.publish(HBCAgent.MULTICAST, dict(command="status",
                                                   replyTo="test.status"))

@@ -25,7 +25,7 @@
 	self.totalEventCount = ko.observable(0);
 	self.totalProgressWidth = ko.computed(function () {
 		return Math.floor((self.totalEventCount() / 10) % 100);
-	}).extend({ throttle: 200 });
+	}).extend({ throttle: 100 });
 
 	self.active = ko.observableArray([]);
 	self.credentials = ko.observable();
@@ -43,11 +43,20 @@
 			return;
 		}
 		self.selected().refresh();
-		self.selected().last(10);
+		self.selected().lastN(10);
 	}, 3000);
 
 	eb.onclose = function() {
 		eb = null;
+	};
+	
+	self.stopEventUpdates = function () {
+		var c = self.active();
+		for (var i = 0; i < c.length; i++) {
+			var client = c[i];
+			eb.unregisterHandler(client.address + ".events", client.handleEvent);
+		}
+		
 	};
 
 	self.selectClient = function(client) {
@@ -62,7 +71,7 @@
 	self.selectByCred = function(cred) {
 		console.log(cred);
 		var c = self.active();
-		for (var i = 0; c.length; i++) {
+		for (var i = 0; i < c.length; i++) {
 			if (c[i].name == cred[0]) {
 				self.selectClient(c[i]);
 				return;
@@ -73,6 +82,9 @@
 	self.addFeedEvent = function(item) {
 		while (self.feed().length >= self.maxFeedLength()) {
 			self.feed.pop();
+		}
+		if (!item.text) {
+			console.log(item)
 		}
 		self.feed.unshift(item);
 	};
@@ -89,12 +101,32 @@
 		self.tweetCount = ko.observable(0);
 		self.progressWidth = ko.computed(function () {
 			return Math.floor((self.tweetCount() / 10) % 100);
-		}).extend({ throttle: 200 });
+		}).extend({ throttle: 100 });
 
-		eb.registerHandler(self.address + ".events", function (m) { 
+		self.handleEvent = function (m) { 
 			self.processEvent(m);
-		});
+		};
+		eb.registerHandler(self.address + ".events", self.handleEvent);
 	}
+	
+	Client.prototype.cycle = function () {
+		var self = this;
+		eb.send(self.address, {
+			command: 'cycle'
+		}, function (msg) {
+			console.log(msg);
+		});
+	};
+	
+	Client.prototype.shutdown = function () {
+		var self = this;
+		eb.send(self.address, {
+			command: 'shutdown'
+		}, function (msg) {
+			console.log(msg);
+		});
+	};
+	
 	
 	Client.prototype.processEvent = function(msg) {
 		var self = this;
@@ -135,7 +167,7 @@
 		});
 	};
 
-	Client.prototype.last = function(n) {
+	Client.prototype.lastN = function(n) {
 		var self = this;
 		eb.send(self.address, {
 			'command' : 'last_n',
