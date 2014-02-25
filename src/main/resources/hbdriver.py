@@ -200,7 +200,7 @@ def init_autostart(config):
         if not cfg.get('enabled', True):
             logger.info("Skipping disabled config #%d" % i)
             continue
-        cfg['id'] = "autostart-" + str(i)
+        cfg['id'] = "conf-%s-%s" % (i, cfg.get('name', 'unnamed'))
         EventBus.send('hbdriver.start', cfg, lambda msg: logger.info("Started hosebird for config #%d: %s" % (i, msg.body)))
 
 
@@ -236,7 +236,7 @@ def init_test_setup(config):
                                                           replyTo="test.events"))
 
     # give us 
-    vertx.set_timer(2000, subscribe)
+    #vertx.set_timer(2000, subscribe)
 
     @register('test.status')
     def print_status(msg):
