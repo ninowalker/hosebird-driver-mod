@@ -27,10 +27,6 @@ def test_http():
 
     vertx.create_http_server().request_handler(req_handler).listen(8181, "0.0.0.0", listen_handler)
 
-# This test deploys some arbitrary verticle - note that the call to testComplete() is inside the Verticle `SomeVerticle`
-def test_deploy_arbitrary_verticle():
-    vertx.deploy_verticle('com.mycompany.myproject.test.integration.java.SomeVerticle')
-
 # This demonstrates how tests are asynchronous - the timer does not fire until 1 second later -
 # which is almost certainly after the test method has completed.
 def test_complete_on_timer():

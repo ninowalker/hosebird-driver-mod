@@ -1,6 +1,6 @@
 {
   // Python verticle
-  "main": "service.py",
+  "main": "main.py",
 
   "includes": "io.vertx~mod-web-server~2.0.0-final",
 
@@ -15,6 +15,6 @@
   "keywords": ["Twitter", "Hosebird", "Streaming API"],
   "homepage": "https://github.com/ninowalker/hosebird-driver-mod",
 
-  "auto-redeploy": false
+  "auto-redeploy": true
 
 }

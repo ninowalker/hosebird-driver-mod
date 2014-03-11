@@ -1,24 +1,89 @@
 {
-    "testmode": {"exitAfter": 2200},
-    "webserver": {
-        "web_root": "/Users/nino/dev/hbdriver/src/main/resources/web"
+  "credentialsEnvVar": "OAUTH_CREDENTIALS",
+  "credentials": [
+    [
+      "2WDggfkTR3laGdn8naz7EQ",
+      "coKQnbSjlAjYZQxmpZcZVx9V3trcvY3KQXw3gW8Tts",
+      "18997494-qKSM8K2VWk47Ye5ZQ6Lien7pNXdleqW63bhp4NGbC",
+      "qAZuZLL8aNHb3ftOxC40JxyEzgr12JDX54fzMDhRRk"
+    ]
+  ],
+  "autostart": [
+    {
+      "matching": true,
+      "type": "StatusesFilterEndpoint",
+      "name": "san-francisco",
+      "xlocation": [
+        {
+          "rules": ["somewhere-remote-in-africa"],
+          "bounds": [0, 0, 1, 1]
+        }
+      ],
+      "follow": [
+        {
+          "tags": ["awesome"],
+          "mentions": true,
+          "screen_name": "winddog001",
+          "id": 12345
+        }
+      ],
+      "track": [
+        {
+          "tags": ["felines", "omg"],
+          "phrase": "lol && cats"
+        },
+        {
+          "tags": ["awesome"],
+          "phrase": "san francisco && giants"
+        }
+      ]
     },
-    "autostart": [
-                  {
-                      "track": ["sochi"],
-                      "name": "test",
-                      "id": "set at runtime",
-                      "type": "StatusesFilter"
-                  },
-                  {
-                      "track": ["lol", "meow", "omfg"],
-                      "name": "test-2",
-                      "id": "set at runtime",
-                      "type": "StatusesFilter"
-                  }
-                 ],
-    "credentials": [
-                    ["2WDggfkTR3laGdn8naz7EQ", "coKQnbSjlAjYZQxmpZcZVx9V3trcvY3KQXw3gW8Tts", "18997494-qKSM8K2VWk47Ye5ZQ6Lien7pNXdleqW63bhp4NGbC", "qAZuZLL8aNHb3ftOxC40JxyEzgr12JDX54fzMDhRRk"]
-                    ],
-    "credentialsEnvVar": "OAUTH_CREDENTIALS"
+    {
+      "type": "StatusesFilterEndpoint",
+      "name": "test-2",
+      "track": [
+        {
+          "phrase": "lol && omg"
+        },
+        {
+          "phrase": "meow"
+        }
+      ]
+    }
+  ],
+  "pipeline": [
+    {
+      "name": "JsonParser"
+    },
+    {
+      "name": "Decrufter"
+    },
+    {
+      "name": "TagMatcher"
+    },
+    {
+      "options": {
+        "tweetSampleRate": 1,
+        "numMessages": 20,
+        "numTweets": 20
+      },
+      "name": "RecentSampler"
+    },
+    {
+      "name": "Probe"
+    },
+    {
+        "name": "Printer"
+    },    
+    {
+      "name": "StreamGenerator"
+    }
+  ],
+  "webserver": {
+    "web_root": "/Users/nino/dev/hbdriver/src/main/resources/web"
+  },
+  "testmode": {
+    "exitAfter": 3600
+  },
+  "debug": true
 }
