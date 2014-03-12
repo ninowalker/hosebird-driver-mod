@@ -61,9 +61,6 @@ class Pipeline(object):
     def get(self, pclass):
         return self.pmap.get(pclass)
 
-    def publish(self, address, msg):
-        EventBus.publish(address, msg)
-
 
 class PipelineHandler(object):
     _last = None
@@ -93,9 +90,6 @@ class PipelineHandler(object):
     def next(self, o):
         if self._next:
             self._next(o)
-
-    def publish(self, address, msg):
-        self._pipeline.publish(address, msg)
 
 
 class HosebirdSpout(PipelineHandler):
@@ -169,7 +163,7 @@ class Decrufter(PipelineHandler):
                              'following',
                              'geo_enabled',
                              'is_translator',
-                             'listed_count',
+                             #'listed_count',
                              'notifications',
                              'profile_background_color',
                              'profile_background_image_url',
@@ -326,12 +320,12 @@ class Probe(PipelineHandler):
     def __init__(self, client_config, **options):
         self.address = '%s.%s' % (client_config['driverAddress'], options.get('name', 'trace'))
 
-    def __call__(self, map):
-        if 'text' in map:
+    def __call__(self, o):
+        if 'text' in o:
             EventBus.publish(self.address, self.TWEET)
-        elif 'limit' in map or 'warning' in map or 'disconnect' in map:
-            EventBus.publish(self.address, map)
-        self.next(map)
+        elif 'limit' in o or 'warning' in o or 'disconnect' in o:
+            EventBus.publish(self.address, o)
+        self.next(o)
 
 
 class Printer(PipelineHandler):
@@ -345,8 +339,9 @@ class Printer(PipelineHandler):
 
 class StreamGenerator(PipelineHandler):
     def __init__(self, client_config, **options):
-        self.address = options.get('address') or '%s.%s' % (client_config['driverAddress'], options.get('name', 'stream'))
+        self.address = options.get('address') or '%s.%s' % (client_config['driverAddress'],
+                                                            options.get('name', 'stream'))
 
     def __call__(self, o):
-        #EventBus.publish(self.address, o)
+        EventBus.publish(self.address, o)
         self.next(o)

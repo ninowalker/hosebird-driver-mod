@@ -1,12 +1,13 @@
 # Simple integration test which shows tests deploying other verticles, using the Vert.x API etc
+import vertx
+from core.event_bus import EventBus
 from org.vertx.testtools import VertxAssert
 import vertx_tests
-from core.event_bus import EventBus
-import vertx
 
 # The test methods must begin with "test"
 
-def test_http():
+
+def xxxxtest_http():
     # Create an HTTP server which just sends back OK response immediately
 
     def req_handler(req):
@@ -29,7 +30,7 @@ def test_http():
 
 # This demonstrates how tests are asynchronous - the timer does not fire until 1 second later -
 # which is almost certainly after the test method has completed.
-def test_complete_on_timer():
+def xxxxtest_complete_on_timer():
     def handler(timer_id):
         VertxAssert.assertNotNull(timer_id)
         VertxAssert.testComplete()

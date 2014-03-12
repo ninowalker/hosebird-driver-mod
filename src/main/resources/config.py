@@ -4,7 +4,6 @@ from com.twitter.hbc.core.endpoint import StatusesFilterEndpoint, Location
 from com.twitter.hbc.core.processor import StringDelimitedProcessor
 from com.twitter.hbc.httpclient.auth import OAuth1
 from java.util.concurrent import LinkedBlockingQueue
-from juice import Juice
 import vertx
 
 
@@ -23,10 +22,9 @@ class ClientFactory(object):
     def __init__(self, **options):
         self.options = options
 
-    def __call__(self, client_cfg, pipeline, creds):
+    def __call__(self, client_cfg, callback, creds):
         endpoint = self._endpoint(client_cfg)
-        #pipeline = Juice.pipeline_factory(client_cfg)
-        processor = StringDelimitedProcessor(DelegateProxy(pipeline))
+        processor = StringDelimitedProcessor(DelegateProxy(callback))
         hosts = self.options.get("streamHost", Constants.STREAM_HOST)
 
         auth = OAuth1(*creds)
@@ -66,12 +64,15 @@ class ClientFactory(object):
 
 
 class DelegateProxy(LinkedBlockingQueue):
-    """Mocks the interface and instead calls func."""
+    """Mocks the interface of a Queue and instead calls a delegate function."""
     def __init__(self, func):
         self.func = func
 
     def offer(self, item, *_args):
-        self.func(item)
+        try:
+            self.func(item)
+        except Exception, e:
+            logger.error("Failed to invoke callback: %s" % e, e)
 
 
 #def defmain():
