@@ -19,8 +19,10 @@ class PipelineFactory(object):
     def __call__(self, client_config):
         h = [HosebirdSpout(client_config)]
         for d in self.desc:
-            # brittle for now
+            # brittle for now: look at this module
             handler = globals()[d['name']]
+            if not d.get('enabled', True):
+                continue
             kwargs = d.get("options", {})
             h.append(handler(client_config, **kwargs))
         return Pipeline(h)
@@ -318,7 +320,8 @@ class Probe(PipelineHandler):
     TWEET = 1
 
     def __init__(self, client_config, **options):
-        self.address = '%s.%s' % (client_config['driverAddress'], options.get('name', 'trace'))
+        self.address = '%s.%s' % (client_config['instanceAddress'],
+                                  options.get('name', 'trace'))
 
     def __call__(self, o):
         if 'text' in o:
@@ -343,5 +346,5 @@ class StreamGenerator(PipelineHandler):
                                                             options.get('name', 'stream'))
 
     def __call__(self, o):
-        EventBus.publish(self.address, o)
+        #EventBus.publish(self.address, o)
         self.next(o)

@@ -29,45 +29,6 @@ def xxxxxtest_match():
         WORDS = open(word_file).read().splitlines()
 
         m = CrudeFastTextMatcher(pad=True)
-        m.add("#lolz", 1)
-        m.add("#lol", 2)
-        m.add("lol", 3)
-        m.add("fun", 5)
-        m.add("@andersoncooper", 6)
-        m.add("@sochi", 6)
-        for w in random.sample(WORDS, 5000):
-            m.add(w.lower(), w)
-
-        res = m.search(t)
-        s = time.time()
-        n = 100000
-        for i in xrange(n):
-            res = m.search(t)
-
-        d = time.time() - s
-        print (d / n) * 10 ** 6
-
-        m = PrettyGoodTweetMatcher()
-        for w in random.sample(WORDS, 5000):
-            m.add_phrase(w.lower(), w)
-
-        m.add_phrase("catz cool", 1)
-        m.add_user(1234, 2)
-        for i in xrange(1000):
-            m.add_user(i, i)
-
-        s = time.time()
-        n = 100000
-        for i in xrange(n):
-            res = m.search(t)
-
-        d = time.time() - s
-        print (d / n) * 10 ** 6
-
-        print res
-        VertxAssert.assertEquals(1, len(res))
-        VertxAssert.assertEquals(1, res["#lolz"])
-        VertxAssert.assertEquals(2, res["#lolz"])
     finally:
         VertxAssert.testComplete()
 

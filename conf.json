@@ -80,7 +80,8 @@
         "name": "Printer"
     },    
     {
-      "name": "StreamGenerator"
+      "name": "StreamGenerator",
+      "enabled": false
     }
   ],
   "webserver": {

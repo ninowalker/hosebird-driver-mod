@@ -10,37 +10,56 @@ import time
 logger = vertx.logger()
 
 
-class MultiAgentRPCHandler(object):
+class PluralActor(object):
+    """
+    Class the facilitate communication between one or all instances.
+    """
+
     def handler(self, msg):
+        """
+        Given a directed to a single actor, command, use introspection to
+        invoke the command an send a reply.
+        """
         command = msg.body['command']
-        #logger.info("%s -> %s" % (self.name, command))
+        logger.debug("%s-%s.rpc(%s)" % (self.__class__.__name__, id(self), command))
         reply = getattr(self, "handle_%s" % command)(msg)
         reply['command'] = command
+        reply['from'] = self.address
         msg.reply(reply)
 
     def multicast_handler(self, msg):
         command = msg.body['command']
         replyTo = msg.body.get('replyTo')
-        #logger.info("%s -> %s -> %s" % (self.name, command, replyTo))
+        logger.debug("%s-%s.multicast(%s) -> %s" % (self.__class__.__name__, id(self),
+                                                    command, replyTo))
         reply = getattr(self, "handle_%s" % command)(msg)
         reply['command'] = command
+        reply['from'] = self._address
         if replyTo:
             EventBus.publish(replyTo, reply)
 
+    def bind(self, bus, address, mcast_address):
+        self._address = address
+        self._handlers = []
+        for addr, h in [(address, self.handler),
+                        (mcast_address, self.multicast_handler)]:
+            self._handlers.append(bus.register_handler(addr, handler=h))
 
-class HosebirdDriver(MultiAgentRPCHandler):
+    def unbind(self, bus):
+        for hid in self._handlers:
+            bus.unregister_handler(hid)
+
+
+class HosebirdDriver(PluralActor):
     MULTICAST = "hbdriver.multicast"
     ANNOUNCE_ADDRESS = "hbdriver.announce"
 
     def __init__(self, config):
         self.id = config['id']
-        self.address = config['driverAddress']
+        self.address = config['instanceAddress']
         self.cfg = config
         self.pipeline = Juice.pipeline_factory(config)
-        self._handlers = []
-        for addr, h in [(self.address, self.handler),
-                        (self.MULTICAST, self.multicast_handler)]:
-            self._handlers.append(EventBus.register_handler(addr, handler=h))
+        self.bind(EventBus, self.address, self.MULTICAST)
 
     @property
     def name(self):
@@ -72,51 +91,62 @@ class HosebirdDriver(MultiAgentRPCHandler):
             return dict(status=404)
         return recent.recent(n)
 
-    def handle_get_config(self, msg):
+    def handle_get_config(self, _):
         return dict(config=self.cfg, status=200)
 
-    def handle_shutdown(self, msg):
+    def handle_shutdown(self, _):
         logger.warn("Shutting down %s..." % self.address)
         self.pipeline.shutdown()
-        for hid in self._handlers:
-            EventBus.unregister_handler(hid)
         logger.info("Shutdown %s" % self.address)
         self.announce(dict(action="shutdown"))
         return dict(status=200, address=self.address)
 
-
-class Director(MultiAgentRPCHandler):
-    address = 'hbdriver'
-
-    def __init__(self):
-        self.recent = CircularFifoBuffer(200)
-        self.id = id(self)
-        EventBus.register_handler(self.address, handler=self.handler)
-        EventBus.register_handler(HosebirdDriver.ANNOUNCE_ADDRESS,
-                                  handler=self.handle_announcement)
-        # announce our presence for auditing
-        EventBus.publish(HosebirdDriver.ANNOUNCE_ADDRESS,
-                         dict(action="director.init", id=self.id))
-        # ask everyone to report status to read the health of the cluster
-        EventBus.publish(HosebirdDriver.MULTICAST,
-                         dict(command="status",
-                              replyTo=HosebirdDriver.ANNOUNCE_ADDRESS))
-
-    def __call__(self, msg):
-        self.handler(msg)
-
-    def handle_announcement(self, msg):
-        self.recent.add(dict(time=time.time(), m=msg.body))
-
-    def handle_new(self, msg):
+    @classmethod
+    def handle_new(cls, msg):
         cfg = msg.body['config']
         driver = HosebirdDriver(ClientConfig(cfg))
         driver.start()
         return dict(status=200, address=driver.address)
 
+EventBus.register_handler('hbdriver.new', handler=HosebirdDriver.handle_new)
+
+
+class Secretary(PluralActor):
+    """
+    Responsible for tracking the comings and goings and important announcements.
+
+    While not a plural actor in a single verticle, it's plural across multiple
+    verticles and actors.
+    """
+
+    MULTICAST = 'hbdriver.secretaries'
+
+    def __init__(self):
+        self.recent = CircularFifoBuffer(200)
+        self.id = id(self)
+        self.address = 'hbsecretary.%s' % self.id
+
+        self.bind(EventBus, self.address, self.MULTICAST)
+
+        EventBus.register_handler(self.address, handler=self.handler)
+        EventBus.register_handler(HosebirdDriver.ANNOUNCE_ADDRESS,
+                                  handler=self.handle_announcement)
+        # announce our presence for auditing
+        EventBus.publish(HosebirdDriver.ANNOUNCE_ADDRESS,
+                         dict(action="secretary.init", id=self.id))
+        # ask everyone to report status to read the health of the cluster
+        EventBus.publish(HosebirdDriver.MULTICAST,
+                         dict(command="status",
+                              replyTo=HosebirdDriver.ANNOUNCE_ADDRESS))
+
+    def handle_announcement(self, msg):
+        self.recent.add(dict(time=time.time(), m=msg.body))
+
     def handle_recent_history(self, msg):
         n = msg.body.get('n', 20)
         return dict(status=200, history=list(self.recent)[0:n])
+
+
 
 
 # ultimately this should be cluster safe
@@ -176,7 +206,7 @@ class CredentialManager(object):
         return mgr
 
 
-class WebController(MultiAgentRPCHandler):
+class WebController(object):
     # Configuration for the web server
     web_server_conf = {
         'module': 'io.vertx~mod-web-server~2.0.0-final',

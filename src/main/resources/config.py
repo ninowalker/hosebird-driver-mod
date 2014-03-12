@@ -15,7 +15,7 @@ class ClientConfig(dict):
         self.update(d or {})
         self.update(**kwargs)
         self['id'] = "%s-%s" % (self.get('name', 'unnamed'), id(self))
-        self['driverAddress'] = "hbinstance.%s" % self['id']
+        self['instanceAddress'] = "hbinstance.%s" % self['id']
 
 
 class ClientFactory(object):
