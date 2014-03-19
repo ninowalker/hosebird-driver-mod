@@ -14,18 +14,54 @@
  * limitations under the License.
  */
 
+var navigation = new (function() {
+	var self = this;
+	self.breadCrumbs = ko.observableArray();
+
+	self.push = function(url, text, callback) {
+		var me = this;
+		self.breadCrumbs.push({
+			'url' : url,
+			'text' : text,
+			'active' : true,
+			'activate': function () {
+				self.popUntil(url, callback);
+			}
+		});
+	}
+	self.pop = function () {
+		var c = self.breadCrumbs(),
+			prev = c[c.length - 2];
+		self.popUntil(prev.url, function () {});
+	}
+	
+	self.popUntil = function(url, callback) {
+		var c = self.breadCrumbs();
+		while (c[c.length - 1].url != url) {
+			self.breadCrumbs.pop();
+		}
+		callback();
+	}
+
+	self.reset = function() {
+		self.breadCrumbs.removeAll();
+	}
+	return self;
+})();
+
 (function HosebirdDriverModel() {
 	var self = this, view = this;
 
 	var eb = new vertx.EventBus(window.location.protocol + '//'
-			+ window.location.hostname + ':' + window.location.port
-			+ '/eventbus');
+			+ window.location.hostname + ':' + 8080 + '/eventbus');
 	view.event_bus = eb;
 	window.model = this;
 	self.totalEventCount = ko.observable(0);
-	self.totalProgressWidth = ko.computed(function () {
+	self.totalProgressWidth = ko.computed(function() {
 		return Math.floor((self.totalEventCount() / 10) % 100);
-	}).extend({ throttle: 100 });
+	}).extend({
+		throttle : 100
+	});
 
 	self.active = ko.observableArray([]);
 	self.credentials = ko.observable();
@@ -49,23 +85,28 @@
 	eb.onclose = function() {
 		eb = null;
 	};
-	
-	self.stopEventUpdates = function () {
+
+	self.stopEventUpdates = function() {
 		var c = self.active();
 		for (var i = 0; i < c.length; i++) {
-			var client = c[i];
-			eb.unregisterHandler(client.address + ".events", client.handleEvent);
+			var Connection = c[i];
+			eb
+					.unregisterHandler(Connection.address + ".events",
+							Connection.handleEvent);
 		}
-		
+
 	};
 
-	self.selectClient = function(client) {
-		console.log(client);
-		self.selected(client);
+	self.selectConnection = function(connection) {
+		if (self.selected()) {
+			navigation.pop();
+		}
+		self.selected(connection);
+		navigation.push("#/" + connection.name, connection.name, active, function () {})
 	};
 
 	self.clearSelected = function() {
-		self.selectClient(null);
+		self.selectConnection(null);
 	}
 
 	self.selectByCred = function(cred) {
@@ -73,7 +114,7 @@
 		var c = self.active();
 		for (var i = 0; i < c.length; i++) {
 			if (c[i].name == cred[0]) {
-				self.selectClient(c[i]);
+				self.selectConnection(c[i]);
 				return;
 			}
 		}
@@ -89,7 +130,7 @@
 		self.feed.unshift(item);
 	};
 
-	function Client(json) {
+	function Connection(json) {
 		var self = this;
 		self.name = json.address.replace(/^.*\./, "");
 		self.address = json.address;
@@ -99,46 +140,48 @@
 		self._update(json);
 		self.maxLength = 20;
 		self.tweetCount = ko.observable(0);
-		self.progressWidth = ko.computed(function () {
+		self.progressWidth = ko.computed(function() {
 			return Math.floor((self.tweetCount() / 10) % 100);
-		}).extend({ throttle: 100 });
+		}).extend({
+			throttle : 100
+		});
 
-		self.handleEvent = function (m) { 
+		self.handleEvent = function(m) {
 			self.processEvent(m);
 		};
-		eb.registerHandler(self.address + ".events", self.handleEvent);
+		// can't deal wit hall the events.
+		//eb.registerHandler(self.address + ".events", self.handleEvent);
 	}
-	
-	Client.prototype.cycle = function () {
+
+	Connection.prototype.cycle = function() {
 		var self = this;
 		eb.send(self.address, {
-			command: 'cycle'
-		}, function (msg) {
+			command : 'cycle'
+		}, function(msg) {
 			console.log(msg);
 		});
 	};
-	
-	Client.prototype.shutdown = function () {
+
+	Connection.prototype.shutdown = function() {
 		var self = this;
 		eb.send(self.address, {
-			command: 'shutdown'
-		}, function (msg) {
+			command : 'shutdown'
+		}, function(msg) {
 			console.log(msg);
 		});
 	};
-	
-	
-	Client.prototype.processEvent = function(msg) {
+
+	Connection.prototype.processEvent = function(msg) {
 		var self = this;
 		if (typeof msg === 'number') {
 			self.tweetCount(self.tweetCount() + 1);
 			view.totalEventCount(view.totalEventCount() + 1);
 		} else {
 			console.log(msg);
-		}		
+		}
 	};
 
-	Client.prototype._update = function(json) {
+	Connection.prototype._update = function(json) {
 		var self = this;
 		self.config(json.config);
 		for ( var type in json.stats) {
@@ -154,11 +197,12 @@
 			self.statValues[type] = item.value;
 		}
 		self.stats.sort(function(left, right) {
-			return left.type === right.type ? 0 : (left.type < right.type ? -1 : 1)
+			return left.type === right.type ? 0 : (left.type < right.type ? -1
+					: 1)
 		});
 	};
 
-	Client.prototype.refresh = function() {
+	Connection.prototype.refresh = function() {
 		var self = this;
 		eb.send(self.address, {
 			'command' : 'status'
@@ -167,7 +211,7 @@
 		});
 	};
 
-	Client.prototype.lastN = function(n) {
+	Connection.prototype.lastN = function(n) {
 		var self = this;
 		eb.send(self.address, {
 			'command' : 'last_n',
@@ -195,7 +239,7 @@
 
 	self.sections = ko.observableArray([
 			new Section('Recent', 'section-recent'),
-			new Section('Add', 'section-add') ]);
+			new Section('Controls', 'section-controls') ]);
 
 	self.selectedSection = ko.observable(self.sections()[0]);
 
@@ -208,16 +252,16 @@
 	self.selectSection(self.sections()[0]);
 
 	self.sniff = function(f) {
-		self.selectClient(null);
+		self.selectConnection(null);
 		self.selectSection(self.sections()[0]);
 	}
-	
+
 	eb.onopen = function() {
 		self.address = "hbbrowser" + "." + makeUUID();
 		ko.applyBindings(self);
 		eb.registerHandler(self.address + '.stati', function(msg) {
 			console.log(msg);
-			self.active.push(new Client(msg));
+			self.active.push(new Connection(msg));
 		});
 		eb.registerHandler(self.address + ".sniff", function(msg) {
 			self.addFeedEvent(msg)
@@ -233,6 +277,12 @@
 			console.log(msg);
 			self.credentials(msg);
 		});
+
+
+		(function() {
+			navigation.reset();
+			navigation.push('#/Home', 'Hosebird Driver', self.clearSelected);
+		})();
 
 	};
 
@@ -313,20 +363,24 @@
 })();
 
 function syntaxHighlight(json) {
-    json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
-        var cls = 'number';
-        if (/^"/.test(match)) {
-            if (/:$/.test(match)) {
-                cls = 'key';
-            } else {
-                cls = 'string';
-            }
-        } else if (/true|false/.test(match)) {
-            cls = 'boolean';
-        } else if (/null/.test(match)) {
-            cls = 'null';
-        }
-        return '<span class="' + cls + '">' + match + '</span>';
-    });
+	json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g,
+			'&gt;');
+	return json
+			.replace(
+					/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+					function(match) {
+						var cls = 'number';
+						if (/^"/.test(match)) {
+							if (/:$/.test(match)) {
+								cls = 'key';
+							} else {
+								cls = 'string';
+							}
+						} else if (/true|false/.test(match)) {
+							cls = 'boolean';
+						} else if (/null/.test(match)) {
+							cls = 'null';
+						}
+						return '<span class="' + cls + '">' + match + '</span>';
+					});
 }

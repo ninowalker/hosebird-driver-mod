@@ -46,95 +46,81 @@ pre {
 	<div class="container">
 		<div class="row clearfix">
 			<div class="col-md-12 column">
-				<ul class="nav nav-tabs">
-					<li class="active"><a href="#">Hosebird Clients</a></li>
-					<li class="dropdown pull-right"><a href="#" data-toggle="dropdown" class="dropdown-toggle">Clients<strong
+				<ul class="breadcrumb">
+					<!--  ko foreach: navigation.breadCrumbs -->
+					<li><a
+						data-bind="attr: { href: url }, text: text, css: { active: active }, click: activate"></a> <span
+						data-bind="visible: $index < navigation.breadCrumbs - 1" class="divider">/</span></li>
+					<!-- /ko -->
+					<li class="dropdown pull-right"><a href="#" data-toggle="dropdown" class="dropdown-toggle">Connections<strong
 							class="caret"></strong></a>
 						<ul class="dropdown-menu" data-bind="foreach: active">
-							<li><a href="#" data-bind="click: $root.selectClient"><span data-bind="text: name"></span></a></li>
+							<li><a href="#" data-bind="click: $root.selectConnection"><span
+									data-bind="text: name"></span></a></li>
 						</ul></li>
 				</ul>
 				<div class="row clearfix">
-					<div class="col-md-8 column">
-						<h3>
-							Managing <strong data-bind="text:total">0</strong> Connections
-						</h3>
+					<div class="col-md-12 column">
 						<div class="row clearfix">
-							<div class="col-md-10 column">
-
-								<div class="progress">
-									<div class="progress-bar tweet-count-progress" role="progressbar" aria-valuenow="0"
-										aria-valuemin="0" aria-valuemax="100"
-										data-bind="style: { width: totalProgressWidth() + '%'}">
-										<span data-bind="text: totalEventCount"></span>
-									</div>
-								</div>
-							</div>
 							<div class="col-md-2 column">
-								<button type="button" class="btn btn-warning" data-bind="click: stopEventUpdates">Unsubscribe</button>
+								<div class="list-group">
+									<a href="#" class="list-group-item active">Connections</a>
+									<!-- ko foreach: active -->
+									<div class="list-group-item">
+										<h4 class="list-group-item-heading">
+											<a data-bind="click: $root.selectConnection, text: name"></a> <span class="badge">14</span>
+										</h4>
+										<p class="list-group-item-text">...</p>
+									</div>
+									<!-- /ko -->
+								</div>
 							</div>
-						</div>
-						<div class="list-group" data-bind="foreach: active">
-							<a href="#" class="list-group-item" data-bind="click: $root.selectClient">
-								<h4 class="list-group-item-heading" data-bind="text: name"></h4>
-								<div class="progress">
-									<div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0"
-										aria-valuemax="100" data-bind="style: { width: progressWidth() + '%'}">
-										<span data-bind="text: tweetCount"></span>
+							<div class="col-md-6 column">
+								<div data-bind="with: selected">
+									<h4>
+										<span data-bind="text: name"></span>
+									</h4>
+									<div class="progress">
+										<div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0"
+											aria-valuemax="100" data-bind="style: { width: progressWidth() + '%'}">
+											<span data-bind="text: tweetCount"></span>
+										</div>
+									</div>
+									<table class="table">
+										<thead>
+											<tr>
+												<th data-bind="text: name"></th>
+												<th data-bind="text: config().credentials[0]"></th>
+											</tr>
+										</thead>
+										<tbody data-bind="foreach: stats">
+											<tr>
+												<td><span data-bind="text: type"></span></td>
+												<td><span class="badge" data-bind="text: value"></span></td>
+											</tr>
+										</tbody>
+									</table>
+									<div class="well">
+										<pre data-bind="text: JSON.stringify(config(), undefined, 2)"></pre>
 									</div>
 								</div>
-
-							</a>
-						</div>
-						<div data-bind="with: selected">
-							<h4>
-								<span data-bind="text: name"></span> 
-								<span class="label label-default" data-bind="click: $root.clearSelected">hide</span>
-								<span class="label label-warning" data-bind="click: cycle">cycle</span>
-								<span class="label label-danger" data-bind="click: shutdown">shutdown</span>
-							</h4>
-							<table class="table">
-								<thead>
-									<tr>
-										<th data-bind="text: name"></th>
-										<th data-bind="text: config().credentials[0]"></th>
-									</tr>
-								</thead>
-								<tbody data-bind="foreach: stats">
-									<tr>
-										<td><span data-bind="text: type"></span></td>
-										<td><span class="badge" data-bind="text: value"></span></td>
-									</tr>
-								</tbody>
-							</table>
-							<div class="well">
-								<pre data-bind="text: JSON.stringify(config(), undefined, 2)"></pre>
 							</div>
-						</div>
-						<!-- 						<div class="row clearfix">
 							<div class="col-md-4 column">
-								<h3>h3. Lorem ipsum dolor sit amet.</h3>
-								<div class="progress">
-									<div class="progress-bar progress-success"></div>
+							    <!-- ko if: selected -->
+								<div class="tabbable">
+									<ul class="nav nav-tabs" data-bind="foreach: sections">
+										<li data-bind="css: { active: selected }"><a
+											data-bind="attr: { href: '#tab' + name }, click: $root.selectSection" data-toggle="tab">
+												<span data-bind="text: name" />
+										</a></li>
+									</ul>
+									<div class="tab-content" data-bind="foreach: sections">
+										<div class="tab-pane" data-bind="attr: { id: 'tab' + name }, css: { active: selected }">
+											<div data-bind="template: { name: template, data: $data }"></div>
+										</div>
+									</div>
 								</div>
-							</div>
-							<div class="col-md-4 column"></div>
-							<div class="col-md-4 column"></div>
-						</div>
- -->
-					</div>
-					<div class="col-md-4 column">
-						<div class="tabbable">
-							<ul class="nav nav-tabs" data-bind="foreach: sections">
-								<li data-bind="css: { active: selected }"><a
-									data-bind="attr: { href: '#tab' + name }, click: $root.selectSection" data-toggle="tab">
-										<span data-bind="text: name" />
-								</a></li>
-							</ul>
-							<div class="tab-content" data-bind="foreach: sections">
-								<div class="tab-pane" data-bind="attr: { id: 'tab' + name }, css: { active: selected }">
-									<div data-bind="template: { name: template, data: $data }"></div>
-								</div>
+								<!-- /ko -->
 							</div>
 						</div>
 					</div>
@@ -155,15 +141,24 @@ pre {
                             </div>
                             
                         </div></script>
-	<script type="text/html" id="section-add">
-                        Hello add</script>
+	<script type="text/html" id="section-controls">
+<div class="row clearfix">
+                        <div class="col-md-12 column">
+                            <div>
+                             <button type="button" class="btn btn-warning" data-bind="click: $root.selected.cycle">Restart</button>
+                             <button type="button" class="btn btn-danger btn-default" data-bind="click: $root.selected.shutdown">Stop</button>
+                            </div>
+                        </div>
+</div>
+   </script>
 
 	<script src="https://code.jquery.com/jquery-1.7.1.min.js"></script>
 	<!-- Latest compiled and minified JavaScript -->
 	<script src="//netdna.bootstrapcdn.com/bootstrap/3.1.0/js/bootstrap.min.js"></script>
 	<script src="http://d3js.org/d3.v3.min.js"></script>
 	<script src='js3rdparty/sockjs-min-0.3.4.js'></script>
-	<script src='js3rdparty/knockout-2.0.0.js'></script>
+	<script type='text/javascript'
+		src='//cdnjs.cloudflare.com/ajax/libs/knockout/3.1.0/knockout-min.js'></script>
 	<script src='js/vertxbus.js'></script>
 	<script src='js/client_app.js'></script>
 </html>
